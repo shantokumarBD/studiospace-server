@@ -28,11 +28,30 @@ export async function connectToMongoDB() {
 // Database & Collections 
 const mongoClient = await connectToMongoDB();
 const db = mongoClient.db("studiospace");
+const studiosCollection = db.collection("studios");
 
 
 app.get("/", (req, res) => {
   res.send("StudioSpace server is running successfully!");
 });
+
+app.get("/featured-studios", async (req, res) => {
+  try {
+    const result = await studiosCollection.find().limit(6).toArray();
+
+    res.send({
+      success: true,
+      message: "Successfully fetched featured studios",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
 
 
 // Server Listen
