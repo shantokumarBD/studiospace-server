@@ -118,6 +118,16 @@ app.get("/studios/:id", async (req, res) => {
 });
 
 
+app.post("/studios", async (req, res) => {
+  try {
+    const newStudio = req.body;
+    const result = await studiosCollection.insertOne(newStudio);
+    res.send({ success: true, data: result });
+  } catch (error) {
+    res.status(500).send({ success: false, message: error.message });
+  }
+});
+
 
 
 // Server Listen
