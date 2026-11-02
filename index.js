@@ -37,7 +37,7 @@ app.get("/", (req, res) => {
 
 app.get("/featured-studios", async (req, res) => {
   try {
-    const result = await studiosCollection.find().limit(6).toArray();
+    const result = await studiosCollection.find().sort({rating: -1}).limit(6).toArray();
 
     res.send({
       success: true,
@@ -51,6 +51,48 @@ app.get("/featured-studios", async (req, res) => {
     });
   }
 });
+
+app.get("/studios", async (req, res) => {
+  try {
+    const { search, category, sort } = req.query;
+
+    let query = {};
+
+    if (category && category !== "All Categories") {
+      query.category = category;
+    }
+
+    let result = await studiosCollection.find(query).toArray();
+
+    if (search) {
+      const searchLower = search.toLowerCase();
+      result = result.filter((studio) =>
+        studio.title.toLowerCase().includes(searchLower)
+      );
+    }
+
+    if (sort === "rate-asc") {
+      result.sort((a, b) => a.hourlyRate - b.hourlyRate);
+    } else if (sort === "rate-desc") {
+      result.sort((a, b) => b.hourlyRate - a.hourlyRate);
+    } else if (sort === "rating") {
+      result.sort((a, b) => b.rating - a.rating);
+    }
+
+    res.send({
+      success: true,
+      message: "Successfully fetched studios",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
 
 
 
