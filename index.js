@@ -1,6 +1,6 @@
 import express from "express";
 import "dotenv/config";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import cors from "cors";
 
 
@@ -92,6 +92,30 @@ app.get("/studios", async (req, res) => {
   }
 });
 
+app.get("/studios/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await studiosCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!result) {
+      return res.status(404).send({
+        success: false,
+        message: "Studio not found",
+      });
+    }
+
+    res.send({
+      success: true,
+      message: "Successfully fetched studio details",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
 
 
 
