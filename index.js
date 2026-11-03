@@ -228,11 +228,29 @@ app.put("/studios/:id", verifyToken, async (req, res) => {
 
 
 
-app.post("/bookings",verifyToken, async (req, res) => {
+app.post("/bookings", verifyToken, async (req, res) => {
   try {
+    const { studioId, date, callTime, wrapTime } = req.body;
+    if (studioId && date) {
+      const existingBookings = await bookingsCollection.find({ studioId, date }).toArray();
+      const conflict = existingBookings.some((b) => {
+        const s = (b.status || "").toLowerCase();
+        if (s.includes("cancel")) return false;
+        if (!b.callTime || !b.wrapTime || !callTime || !wrapTime) return false;
+        return callTime < b.wrapTime && wrapTime > b.callTime;
+      });
+
+      if (conflict) {
+        return res.status(409).send({
+          success: false,
+          message: "Time slot collision: A reservation already exists for the selected hours.",
+        });
+      }
+    }
+
     const bookingData = {
       ...req.body,
-      status: req.body.status || "Pending Host Approval",
+      status: req.body.status || "Pending",
       createdAt: new Date(),
     };
     const result = await bookingsCollection.insertOne(bookingData);
