@@ -24,6 +24,7 @@ export async function connectToMongoDB() {
 const mongoClient = await connectToMongoDB();
 const db = mongoClient.db("studiospace");
 const studiosCollection = db.collection("studios");
+const bookingsCollection = db.collection("bookings");
 
 app.get("/", (req, res) => {
   res.send("StudioSpace server is running successfully!");
@@ -196,6 +197,74 @@ app.put("/studios/:id", async (req, res) => {
 });
 
 
+
+app.post("/bookings", async (req, res) => {
+  try {
+    const bookingData = {
+      ...req.body,
+      status: "CONFIRMED",
+      createdAt: new Date(),
+    };
+    const result = await bookingsCollection.insertOne(bookingData);
+    res.send({
+      success: true,
+      message: "Studio booked successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+app.get("/my-bookings", async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).send({
+        success: false,
+        message: "Renter email is required",
+      });
+    }
+
+    const result = await bookingsCollection
+      .find({ renterEmail: email })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send({
+      success: true,
+      message: "Successfully fetched bookings",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+app.delete("/my-bookings/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await bookingsCollection.deleteOne({ _id: new ObjectId(id) });
+
+    res.send({
+      success: true,
+      message: "Booking cancelled successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`StudioSpace server running on port: ${PORT}`);
