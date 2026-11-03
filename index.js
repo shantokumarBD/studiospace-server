@@ -417,3 +417,5 @@ app.delete("/wishlist/:id",verifyToken, async (req, res) => {
 app.listen(PORT, () => {
   console.log(`StudioSpace server running on port: ${PORT}`);
 });
+
+export default app;
