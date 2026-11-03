@@ -1,11 +1,22 @@
 # StudioSpace Server API
 
-Express.js backend and MongoDB database service powering the StudioSpace peer-to-peer creative studio platform.
+Express.js backend and MongoDB database service powering the **StudioSpace** peer-to-peer creative studio platform.
+
+---
+
+## 🌐 Live Service & Repositories
+
+- **Live Server API**: [https://studiospace-server-sem6.onrender.com](https://studiospace-server-sem6.onrender.com)
+- **Live Client Web App**: [https://studiospace-client-bd.vercel.app](https://studiospace-client-bd.vercel.app)
+- **Server Repository**: [https://github.com/shantokumarBD/studiospace-server](https://github.com/shantokumarBD/studiospace-server)
+- **Client Repository**: [https://github.com/shantokumarBD/studiospace-client](https://github.com/shantokumarBD/studiospace-client)
+
+---
 
 ## 🚀 API Endpoints
 
-- `GET /` - Health check
-- `GET /featured-studios` - Fetch top 6 rated production spaces
+- `GET /` - Health check & server status
+- `GET /featured-studios` - Fetch top 6 rated production spaces (`.limit(6)`)
 - `GET /studios` - Browse studios with category, search, and sort filters
 - `GET /studios/:id` - Fetch single studio specifications
 - `POST /studios` - Add new studio (Protected by `verifyToken`)
@@ -19,10 +30,11 @@ Express.js backend and MongoDB database service powering the StudioSpace peer-to
 - `GET /wishlist?email=...` - Fetch user saved wishlist (Protected by `verifyToken`)
 - `DELETE /wishlist/:id` - Remove studio from wishlist (Protected by `verifyToken`)
 
-## 🛠️ Setup
+---
+
+## 🛠️ Local Setup
 
 ```bash
 npm install
 npm run dev # or node index.js
 ```
-
