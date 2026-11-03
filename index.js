@@ -127,6 +127,76 @@ app.post("/studios", async (req, res) => {
   }
 });
 
+app.get("/my-studios", async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).send({
+        success: false,
+        message: "Owner email is required",
+      });
+    }
+
+    const result = await studiosCollection.find({ ownerEmail: email }).toArray();
+
+    res.send({
+      success: true,
+      message: "Successfully fetched my studios",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+app.delete("/studios/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await studiosCollection.deleteOne({ _id: new ObjectId(id) });
+
+    res.send({
+      success: true,
+      message: "Studio deleted successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+app.put("/studios/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = { ...req.body };
+    delete updateData._id;
+
+    const result = await studiosCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
+
+    res.send({
+      success: true,
+      message: "Studio updated successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+
+
 app.listen(PORT, () => {
   console.log(`StudioSpace server running on port: ${PORT}`);
 });
