@@ -25,6 +25,7 @@ const mongoClient = await connectToMongoDB();
 const db = mongoClient.db("studiospace");
 const studiosCollection = db.collection("studios");
 const bookingsCollection = db.collection("bookings");
+const wishlistsCollection = db.collection("wishlists");
 
 app.get("/", (req, res) => {
   res.send("StudioSpace server is running successfully!");
@@ -202,7 +203,7 @@ app.post("/bookings", async (req, res) => {
   try {
     const bookingData = {
       ...req.body,
-      status: "CONFIRMED",
+      status: req.body.status || "Pending Host Approval",
       createdAt: new Date(),
     };
     const result = await bookingsCollection.insertOne(bookingData);
@@ -230,8 +231,9 @@ app.get("/my-bookings", async (req, res) => {
       });
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
     const result = await bookingsCollection
-      .find({ renterEmail: email })
+      .find({ renterEmail: { $regex: `^${normalizedEmail}$`, $options: "i" } })
       .sort({ createdAt: -1 })
       .toArray();
 
@@ -251,11 +253,110 @@ app.get("/my-bookings", async (req, res) => {
 app.delete("/my-bookings/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await bookingsCollection.deleteOne({ _id: new ObjectId(id) });
+    const { permanent } = req.query;
+
+    let result;
+    if (permanent === "true") {
+      result = await bookingsCollection.deleteOne({ _id: new ObjectId(id) });
+    } else {
+      result = await bookingsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: "Cancelled", cancelledAt: new Date() } }
+      );
+    }
 
     res.send({
       success: true,
       message: "Booking cancelled successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+app.post("/wishlist", async (req, res) => {
+  try {
+    const { studioId, userEmail } = req.body;
+    if (!studioId || !userEmail) {
+      return res.status(400).send({
+        success: false,
+        message: "Studio ID and user email are required",
+      });
+    }
+
+    const existing = await wishlistsCollection.findOne({ studioId, userEmail });
+    if (existing) {
+      return res.send({
+        success: true,
+        message: "Studio already in wishlist",
+        data: existing,
+      });
+    }
+
+    const item = {
+      ...req.body,
+      createdAt: new Date(),
+    };
+    const result = await wishlistsCollection.insertOne(item);
+    res.send({
+      success: true,
+      message: "Studio added to wishlist",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+app.get("/wishlist", async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).send({
+        success: false,
+        message: "User email is required",
+      });
+    }
+
+    const result = await wishlistsCollection
+      .find({ userEmail: { $regex: `^${email}$`, $options: "i" } })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send({
+      success: true,
+      message: "Successfully fetched wishlist",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+app.delete("/wishlist/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    let filter;
+    if (ObjectId.isValid(id) && id.length === 24) {
+      filter = { $or: [{ _id: new ObjectId(id) }, { studioId: id }] };
+    } else {
+      filter = { studioId: id };
+    }
+
+    const result = await wishlistsCollection.deleteOne(filter);
+    res.send({
+      success: true,
+      message: "Studio removed from wishlist",
       data: result,
     });
   } catch (error) {
