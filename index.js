@@ -370,3 +370,32 @@ app.delete("/wishlist/:id", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`StudioSpace server running on port: ${PORT}`);
 });
+import { createRemoteJWKSet, jwtVerify } from "jose";
+const JWKS = createRemoteJWKSet(new URL(process.env.JWKS_URL));
+
+const verifyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ success: false, message: "Unauthorized: No token provided" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  if (!token || token === "undefined") {
+    return res.status(401).send({ success: false, message: "Unauthorized: Invalid token structure" });
+  }
+
+  
+
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+    req.user = payload;
+    // console.log(payload);
+    
+    next();
+  } catch (error) {
+    console.error("JWT verification error:", error.message);
+    return res.status(401).send({ success: false, message: "Unauthorized: Invalid or expired token" });
+  }
+};
+
+
