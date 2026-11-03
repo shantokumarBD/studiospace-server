@@ -2,6 +2,7 @@ import express from "express";
 import "dotenv/config";
 import { MongoClient, ObjectId } from "mongodb";
 import cors from "cors";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -26,6 +27,34 @@ const db = mongoClient.db("studiospace");
 const studiosCollection = db.collection("studios");
 const bookingsCollection = db.collection("bookings");
 const wishlistsCollection = db.collection("wishlists");
+
+const JWKS = createRemoteJWKSet(new URL(process.env.JWKS_URL));
+
+const verifyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ success: false, message: "Unauthorized: No token provided" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  if (!token || token === "undefined") {
+    return res.status(401).send({ success: false, message: "Unauthorized: Invalid token structure" });
+  }
+
+  
+
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+    req.user = payload;
+    // console.log(payload);
+    
+    next();
+  } catch (error) {
+    console.error("JWT verification error:", error.message);
+    return res.status(401).send({ success: false, message: "Unauthorized: Invalid or expired token" });
+  }
+};
+
 
 app.get("/", (req, res) => {
   res.send("StudioSpace server is running successfully!");
@@ -113,7 +142,7 @@ app.get("/studios/:id", async (req, res) => {
   }
 });
 
-app.post("/studios", async (req, res) => {
+app.post("/studios", verifyToken, async (req, res) => {
   try {
     const studioData = {
       ...req.body,
@@ -129,7 +158,7 @@ app.post("/studios", async (req, res) => {
   }
 });
 
-app.get("/my-studios", async (req, res) => {
+app.get("/my-studios", verifyToken, async (req, res) => {
   try {
     const { email } = req.query;
 
@@ -155,7 +184,7 @@ app.get("/my-studios", async (req, res) => {
   }
 });
 
-app.delete("/studios/:id", async (req, res) => {
+app.delete("/studios/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await studiosCollection.deleteOne({ _id: new ObjectId(id) });
@@ -173,7 +202,7 @@ app.delete("/studios/:id", async (req, res) => {
   }
 });
 
-app.put("/studios/:id", async (req, res) => {
+app.put("/studios/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
@@ -199,7 +228,7 @@ app.put("/studios/:id", async (req, res) => {
 
 
 
-app.post("/bookings", async (req, res) => {
+app.post("/bookings",verifyToken, async (req, res) => {
   try {
     const bookingData = {
       ...req.body,
@@ -220,7 +249,7 @@ app.post("/bookings", async (req, res) => {
   }
 });
 
-app.get("/my-bookings", async (req, res) => {
+app.get("/my-bookings", verifyToken, async (req, res) => {
   try {
     const { email } = req.query;
 
@@ -250,7 +279,7 @@ app.get("/my-bookings", async (req, res) => {
   }
 });
 
-app.delete("/my-bookings/:id", async (req, res) => {
+app.delete("/my-bookings/:id",verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { permanent } = req.query;
@@ -278,7 +307,7 @@ app.delete("/my-bookings/:id", async (req, res) => {
   }
 });
 
-app.post("/wishlist", async (req, res) => {
+app.post("/wishlist",verifyToken, async (req, res) => {
   try {
     const { studioId, userEmail } = req.body;
     if (!studioId || !userEmail) {
@@ -315,7 +344,7 @@ app.post("/wishlist", async (req, res) => {
   }
 });
 
-app.get("/wishlist", async (req, res) => {
+app.get("/wishlist",verifyToken, async (req, res) => {
   try {
     const { email } = req.query;
     if (!email) {
@@ -343,7 +372,7 @@ app.get("/wishlist", async (req, res) => {
   }
 });
 
-app.delete("/wishlist/:id", async (req, res) => {
+app.delete("/wishlist/:id",verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     let filter;
@@ -370,32 +399,3 @@ app.delete("/wishlist/:id", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`StudioSpace server running on port: ${PORT}`);
 });
-import { createRemoteJWKSet, jwtVerify } from "jose";
-const JWKS = createRemoteJWKSet(new URL(process.env.JWKS_URL));
-
-const verifyToken = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).send({ success: false, message: "Unauthorized: No token provided" });
-  }
-
-  const token = authHeader.split(" ")[1];
-  if (!token || token === "undefined") {
-    return res.status(401).send({ success: false, message: "Unauthorized: Invalid token structure" });
-  }
-
-  
-
-  try {
-    const { payload } = await jwtVerify(token, JWKS);
-    req.user = payload;
-    // console.log(payload);
-    
-    next();
-  } catch (error) {
-    console.error("JWT verification error:", error.message);
-    return res.status(401).send({ success: false, message: "Unauthorized: Invalid or expired token" });
-  }
-};
-
-
