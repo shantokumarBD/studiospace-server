@@ -235,7 +235,7 @@ app.post("/bookings", verifyToken, async (req, res) => {
       const existingBookings = await bookingsCollection.find({ studioId, date }).toArray();
       const conflict = existingBookings.some((b) => {
         const s = (b.status || "").toLowerCase();
-        if (s.includes("cancel")) return false;
+        if (s.includes("cancel") || s.includes("reject")) return false;
         if (!b.callTime || !b.wrapTime || !callTime || !wrapTime) return false;
         return callTime < b.wrapTime && wrapTime > b.callTime;
       });
@@ -248,8 +248,17 @@ app.post("/bookings", verifyToken, async (req, res) => {
       }
     }
 
+    let ownerEmail = req.body.ownerEmail;
+    if (!ownerEmail && studioId && ObjectId.isValid(studioId)) {
+      const studio = await studiosCollection.findOne({ _id: new ObjectId(studioId) });
+      if (studio) {
+        ownerEmail = studio.ownerEmail || studio.userEmail || studio.owner?.email;
+      }
+    }
+
     const bookingData = {
       ...req.body,
+      ownerEmail: ownerEmail || req.body.ownerEmail || "",
       status: req.body.status || "Pending",
       createdAt: new Date(),
     };
@@ -257,6 +266,64 @@ app.post("/bookings", verifyToken, async (req, res) => {
     res.send({
       success: true,
       message: "Studio booked successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+app.get("/host-bookings", verifyToken, async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).send({
+        success: false,
+        message: "Host email is required",
+      });
+    }
+
+    const query = { ownerEmail: email };
+    const result = await bookingsCollection
+      .find(query)
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send({
+      success: true,
+      message: "Successfully fetched host booking requests",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+app.patch("/bookings/:id/status", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!status) {
+      return res.status(400).send({
+        success: false,
+        message: "Status is required",
+      });
+    }
+
+    const result = await bookingsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status, updatedAt: new Date() } }
+    );
+
+    res.send({
+      success: true,
+      message: `Booking status updated to ${status}`,
       data: result,
     });
   } catch (error) {
@@ -278,9 +345,9 @@ app.get("/my-bookings", verifyToken, async (req, res) => {
       });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const query = { renterEmail: email };
     const result = await bookingsCollection
-      .find({ renterEmail: { $regex: `^${normalizedEmail}$`, $options: "i" } })
+      .find(query)
       .sort({ createdAt: -1 })
       .toArray();
 
@@ -362,7 +429,7 @@ app.post("/wishlist",verifyToken, async (req, res) => {
   }
 });
 
-app.get("/wishlist",verifyToken, async (req, res) => {
+app.get("/wishlist", verifyToken, async (req, res) => {
   try {
     const { email } = req.query;
     if (!email) {
@@ -372,8 +439,9 @@ app.get("/wishlist",verifyToken, async (req, res) => {
       });
     }
 
+    const query = { userEmail: email };
     const result = await wishlistsCollection
-      .find({ userEmail: { $regex: `^${email}$`, $options: "i" } })
+      .find(query)
       .sort({ createdAt: -1 })
       .toArray();
 
@@ -390,17 +458,12 @@ app.get("/wishlist",verifyToken, async (req, res) => {
   }
 });
 
-app.delete("/wishlist/:id",verifyToken, async (req, res) => {
+app.delete("/wishlist/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    let filter;
-    if (ObjectId.isValid(id) && id.length === 24) {
-      filter = { $or: [{ _id: new ObjectId(id) }, { studioId: id }] };
-    } else {
-      filter = { studioId: id };
-    }
+    const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { studioId: id };
 
-    const result = await wishlistsCollection.deleteOne(filter);
+    const result = await wishlistsCollection.deleteOne(query);
     res.send({
       success: true,
       message: "Studio removed from wishlist",
