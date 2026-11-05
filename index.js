@@ -16,19 +16,22 @@ export async function connectToMongoDB() {
   try {
     await client.connect();
     console.log("Successfully connected to MongoDB!");
-    return client;
   } catch (err) {
-    console.error("MongoDB connection error:", err);
+    console.error("MongoDB connection notice:", err.message);
   }
+  return client;
 }
 
-const mongoClient = await connectToMongoDB();
-const db = mongoClient.db("studiospace");
+await connectToMongoDB();
+const db = client.db("studiospace");
 const studiosCollection = db.collection("studios");
 const bookingsCollection = db.collection("bookings");
 const wishlistsCollection = db.collection("wishlists");
 
-const JWKS = createRemoteJWKSet(new URL(process.env.JWKS_URL));
+const jwksUrl =
+  process.env.JWKS_URL ||
+  "https://studiospace-client-bd.vercel.app/api/auth/jwks";
+const JWKS = createRemoteJWKSet(new URL(jwksUrl));
 
 const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
