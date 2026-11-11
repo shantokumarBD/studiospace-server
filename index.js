@@ -27,6 +27,7 @@ const db = client.db("studiospace");
 const studiosCollection = db.collection("studios");
 const bookingsCollection = db.collection("bookings");
 const wishlistsCollection = db.collection("wishlists");
+const reviewsCollection = db.collection("reviews");
 
 const jwksUrl =
   process.env.JWKS_URL ||
@@ -109,11 +110,11 @@ app.get("/studios", async (req, res) => {
     }
 
     if (sort === "rate-asc") {
-      result.sort((a, b) => a.hourlyRate - b.hourlyRate);
+      result.sort((a, b) => (Number(a.hourlyRate) || 0) - (Number(b.hourlyRate) || 0));
     } else if (sort === "rate-desc") {
-      result.sort((a, b) => b.hourlyRate - a.hourlyRate);
+      result.sort((a, b) => (Number(b.hourlyRate) || 0) - (Number(a.hourlyRate) || 0));
     } else if (sort === "rating") {
-      result.sort((a, b) => b.rating - a.rating);
+      result.sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0));
     }
 
     res.send({
@@ -145,6 +146,29 @@ app.get("/studios/:id", async (req, res) => {
       success: true,
       message: "Successfully fetched studio details",
       data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+app.get("/studios/:id/booked-slots", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const bookings = await bookingsCollection
+      .find({
+        studioId: id,
+        status: { $nin: ["Cancelled", "Rejected", "cancelled", "rejected"] },
+      })
+      .project({ date: 1, callTime: 1, wrapTime: 1, status: 1 })
+      .toArray();
+
+    res.send({
+      success: true,
+      data: bookings,
     });
   } catch (error) {
     res.status(500).send({
@@ -238,8 +262,30 @@ app.delete("/studios/:id", verifyToken, async (req, res) => {
 app.put("/studios/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res
+        .status(400)
+        .send({ success: false, message: "Invalid studio ID format" });
+    }
+
+    const studio = await studiosCollection.findOne({ _id: new ObjectId(id) });
+    if (!studio) {
+      return res
+        .status(404)
+        .send({ success: false, message: "Studio not found" });
+    }
+
+    if (studio.ownerEmail !== req.user?.email) {
+      return res.status(403).send({
+        success: false,
+        message: "Forbidden: You are not authorized to edit this studio",
+      });
+    }
+
     const updateData = { ...req.body };
     delete updateData._id;
+    delete updateData.ownerEmail;
 
     const result = await studiosCollection.updateOne(
       { _id: new ObjectId(id) },
@@ -353,6 +399,27 @@ app.patch("/bookings/:id/status", verifyToken, async (req, res) => {
       });
     }
 
+    if (!ObjectId.isValid(id)) {
+      return res
+        .status(400)
+        .send({ success: false, message: "Invalid booking ID format" });
+    }
+
+    const booking = await bookingsCollection.findOne({ _id: new ObjectId(id) });
+    if (!booking) {
+      return res
+        .status(404)
+        .send({ success: false, message: "Booking not found" });
+    }
+
+    if (booking.ownerEmail !== req.user?.email) {
+      return res.status(403).send({
+        success: false,
+        message:
+          "Forbidden: You are not authorized to update this booking status",
+      });
+    }
+
     const result = await bookingsCollection.updateOne(
       { _id: new ObjectId(id) },
       { $set: { status, updatedAt: new Date() } },
@@ -405,6 +472,31 @@ app.delete("/my-bookings/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { permanent } = req.query;
+
+    if (!ObjectId.isValid(id)) {
+      return res
+        .status(400)
+        .send({ success: false, message: "Invalid booking ID format" });
+    }
+
+    const booking = await bookingsCollection.findOne({ _id: new ObjectId(id) });
+    if (!booking) {
+      return res
+        .status(404)
+        .send({ success: false, message: "Booking not found" });
+    }
+
+    if (
+      booking.renterEmail !== req.user?.email &&
+      booking.ownerEmail !== req.user?.email
+    ) {
+      return res
+        .status(403)
+        .send({
+          success: false,
+          message: "Forbidden: You are not authorized to cancel this booking",
+        });
+    }
 
     let result;
     if (permanent === "true") {
@@ -507,6 +599,86 @@ app.delete("/wishlist/:id", verifyToken, async (req, res) => {
       success: true,
       message: "Studio removed from wishlist",
       data: result,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// 16. Get Reviews for Studio
+app.get("/studios/:id/reviews", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const reviews = await reviewsCollection
+      .find({ studioId: id })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send({
+      success: true,
+      message: "Successfully fetched studio reviews",
+      data: reviews,
+    });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// 17. Submit Review for Studio (Protected)
+app.post("/studios/:id/reviews", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rating, comment } = req.body;
+
+    if (!rating || !comment || !comment.trim()) {
+      return res.status(400).send({
+        success: false,
+        message: "Star rating and review feedback are required",
+      });
+    }
+
+    const numericRating = Math.min(Math.max(Number(rating) || 5, 1), 5);
+
+    const reviewDoc = {
+      studioId: id,
+      userEmail: req.user?.email || "creator@production.io",
+      userName: req.user?.name || "Verified Creator",
+      userImage: req.user?.image || "",
+      rating: numericRating,
+      comment: comment.trim(),
+      createdAt: new Date(),
+    };
+
+    const insertResult = await reviewsCollection.insertOne(reviewDoc);
+
+    // Recalculate studio average rating
+    const allReviews = await reviewsCollection.find({ studioId: id }).toArray();
+    const avgRating =
+      allReviews.reduce((acc, r) => acc + (Number(r.rating) || 5), 0) /
+      allReviews.length;
+    const roundedRating = Number(avgRating.toFixed(1));
+
+    if (ObjectId.isValid(id)) {
+      await studiosCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: { rating: roundedRating },
+          $inc: { shootsCompleted: 1 },
+        }
+      );
+    }
+
+    res.send({
+      success: true,
+      message: "Review submitted successfully! Thank you for your feedback.",
+      data: { ...reviewDoc, _id: insertResult.insertedId },
+      newRating: roundedRating,
     });
   } catch (error) {
     res.status(500).send({
