@@ -36,28 +36,33 @@ const JWKS = createRemoteJWKSet(new URL(jwksUrl));
 const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
-    return res.status(401).send({ success: false, message: "Unauthorized: No token provided" });
+    return res
+      .status(401)
+      .send({ success: false, message: "Unauthorized: No token provided" });
   }
 
   const token = authHeader.split(" ")[1];
   if (!token || token === "undefined") {
-    return res.status(401).send({ success: false, message: "Unauthorized: Invalid token structure" });
+    return res.status(401).send({
+      success: false,
+      message: "Unauthorized: Invalid token structure",
+    });
   }
-
-  
 
   try {
     const { payload } = await jwtVerify(token, JWKS);
     req.user = payload;
     // console.log(payload);
-    
+
     next();
   } catch (error) {
     console.error("JWT verification error:", error.message);
-    return res.status(401).send({ success: false, message: "Unauthorized: Invalid or expired token" });
+    return res.status(401).send({
+      success: false,
+      message: "Unauthorized: Invalid or expired token",
+    });
   }
 };
-
 
 app.get("/", (req, res) => {
   res.send("StudioSpace server is running successfully!");
@@ -65,7 +70,11 @@ app.get("/", (req, res) => {
 
 app.get("/featured-studios", async (req, res) => {
   try {
-    const result = await studiosCollection.find().sort({ rating: -1 }).limit(6).toArray();
+    const result = await studiosCollection
+      .find()
+      .sort({ rating: -1 })
+      .limit(6)
+      .toArray();
 
     res.send({
       success: true,
@@ -95,7 +104,7 @@ app.get("/studios", async (req, res) => {
     if (search) {
       const searchLower = search.toLowerCase();
       result = result.filter((studio) =>
-        studio.title.toLowerCase().includes(searchLower)
+        studio.title.toLowerCase().includes(searchLower),
       );
     }
 
@@ -172,7 +181,9 @@ app.get("/my-studios", verifyToken, async (req, res) => {
       });
     }
 
-    const result = await studiosCollection.find({ ownerEmail: email }).toArray();
+    const result = await studiosCollection
+      .find({ ownerEmail: email })
+      .toArray();
 
     res.send({
       success: true,
@@ -190,8 +201,27 @@ app.get("/my-studios", verifyToken, async (req, res) => {
 app.delete("/studios/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await studiosCollection.deleteOne({ _id: new ObjectId(id) });
+    if (!ObjectId.isValid(id)) {
+      return res
+        .status(400)
+        .send({ success: false, message: "Invalid studio ID format" });
+    }
+    const studio = await studiosCollection.deleteOne({ _id: new ObjectId(id) });
 
+    if (!studio) {
+      return res
+        .status(404)
+        .send({ success: false, message: "Studio not found" });
+    }
+
+    if (studio.ownerEmail !== req.user?.email) {
+      return res.status(403).send({
+        success: false,
+        message: "Forbidden: You are not authorized to delete this studio",
+      });
+    }
+
+    const result = await studiosCollection.deleteOne({ _id: new ObjectId(id) });
     res.send({
       success: true,
       message: "Studio deleted successfully",
@@ -213,7 +243,7 @@ app.put("/studios/:id", verifyToken, async (req, res) => {
 
     const result = await studiosCollection.updateOne(
       { _id: new ObjectId(id) },
-      { $set: updateData }
+      { $set: updateData },
     );
 
     res.send({
@@ -229,13 +259,13 @@ app.put("/studios/:id", verifyToken, async (req, res) => {
   }
 });
 
-
-
 app.post("/bookings", verifyToken, async (req, res) => {
   try {
     const { studioId, date, callTime, wrapTime } = req.body;
     if (studioId && date) {
-      const existingBookings = await bookingsCollection.find({ studioId, date }).toArray();
+      const existingBookings = await bookingsCollection
+        .find({ studioId, date })
+        .toArray();
       const conflict = existingBookings.some((b) => {
         const s = (b.status || "").toLowerCase();
         if (s.includes("cancel") || s.includes("reject")) return false;
@@ -246,16 +276,20 @@ app.post("/bookings", verifyToken, async (req, res) => {
       if (conflict) {
         return res.status(409).send({
           success: false,
-          message: "Time slot collision: A reservation already exists for the selected hours.",
+          message:
+            "Time slot collision: A reservation already exists for the selected hours.",
         });
       }
     }
 
     let ownerEmail = req.body.ownerEmail;
     if (!ownerEmail && studioId && ObjectId.isValid(studioId)) {
-      const studio = await studiosCollection.findOne({ _id: new ObjectId(studioId) });
+      const studio = await studiosCollection.findOne({
+        _id: new ObjectId(studioId),
+      });
       if (studio) {
-        ownerEmail = studio.ownerEmail || studio.userEmail || studio.owner?.email;
+        ownerEmail =
+          studio.ownerEmail || studio.userEmail || studio.owner?.email;
       }
     }
 
@@ -321,7 +355,7 @@ app.patch("/bookings/:id/status", verifyToken, async (req, res) => {
 
     const result = await bookingsCollection.updateOne(
       { _id: new ObjectId(id) },
-      { $set: { status, updatedAt: new Date() } }
+      { $set: { status, updatedAt: new Date() } },
     );
 
     res.send({
@@ -367,7 +401,7 @@ app.get("/my-bookings", verifyToken, async (req, res) => {
   }
 });
 
-app.delete("/my-bookings/:id",verifyToken, async (req, res) => {
+app.delete("/my-bookings/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { permanent } = req.query;
@@ -378,7 +412,7 @@ app.delete("/my-bookings/:id",verifyToken, async (req, res) => {
     } else {
       result = await bookingsCollection.updateOne(
         { _id: new ObjectId(id) },
-        { $set: { status: "Cancelled", cancelledAt: new Date() } }
+        { $set: { status: "Cancelled", cancelledAt: new Date() } },
       );
     }
 
@@ -395,7 +429,7 @@ app.delete("/my-bookings/:id",verifyToken, async (req, res) => {
   }
 });
 
-app.post("/wishlist",verifyToken, async (req, res) => {
+app.post("/wishlist", verifyToken, async (req, res) => {
   try {
     const { studioId, userEmail } = req.body;
     if (!studioId || !userEmail) {
@@ -464,7 +498,9 @@ app.get("/wishlist", verifyToken, async (req, res) => {
 app.delete("/wishlist/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { studioId: id };
+    const query = ObjectId.isValid(id)
+      ? { _id: new ObjectId(id) }
+      : { studioId: id };
 
     const result = await wishlistsCollection.deleteOne(query);
     res.send({
