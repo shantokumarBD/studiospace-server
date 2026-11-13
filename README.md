@@ -6,7 +6,7 @@ Express.js backend and MongoDB database service powering the **StudioSpace** pee
 
 ## 🌐 Live Service & Repositories
 
-- **Live Server API**: [https://studiospace-server-sem6.onrender.com](https://studiospace-server-sem6.onrender.com)
+- **Live Server API**: [https://studiospace-server-one.vercel.app](https://studiospace-server-one.vercel.app)
 - **Live Client Web App**: [https://studiospace-client-bd.vercel.app](https://studiospace-client-bd.vercel.app)
 - **Server Repository**: [https://github.com/shantokumarBD/studiospace-server](https://github.com/shantokumarBD/studiospace-server)
 - **Client Repository**: [https://github.com/shantokumarBD/studiospace-client](https://github.com/shantokumarBD/studiospace-client)
@@ -27,8 +27,13 @@ Express.js backend and MongoDB database service powering the **StudioSpace** pee
 
 ### 📅 Production Bookings & Scheduling
 - `POST /bookings` - Reserve studio slot with double-booking collision prevention and automatic host email mapping (Protected by `verifyToken`)
+- `GET /studios/:id/booked-slots` - Fetch confirmed/pending reserved slots for a studio to prevent double-booking collisions
 - `GET /my-bookings?email=...` - Fetch user's reservations as renter (Protected by `verifyToken`)
 - `DELETE /my-bookings/:id` - Cancel booking reservation (Protected by `verifyToken`)
+
+### ⭐ Reviews & Creator Feedback
+- `GET /studios/:id/reviews` - Fetch verified reviews and ratings for a studio
+- `POST /studios/:id/reviews` - Submit a review with rating and comment, automatically recalculating the studio's overall star rating (Protected by `verifyToken`)
 
 ### 👑 Host Production Approval & Requests (Beyond-Requirement)
 - `GET /host-bookings?email=...` - Fetch incoming reservation requests made by creators for stages owned by the host (Protected by `verifyToken`)
